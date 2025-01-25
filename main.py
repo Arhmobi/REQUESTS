@@ -2,6 +2,24 @@
 import requests
 import configparser
 import os
+import json
+
+def create_json():
+    json_data = [
+    ]
+    with open('info.json', 'w') as f:
+        f.write(json.dumps(json_data, indent=2, ensure_ascii=True))
+
+create_json()
+
+def add_json(n_1, n_2):
+    json_data = {
+        n_1: n_2
+    }
+    data = json.load(open("info.json"))
+    data.append(json_data)
+    with open("info.json", "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=True)
 
 congig = configparser.ConfigParser()
 congig.read('settings.ini')
@@ -26,16 +44,22 @@ class VK:
         }
         params.update(self.params)
         response = requests.get(url, params=params).json()
-        # if not os.path.exists('images_vk'):
+
+        # if not os.path.exists('images_vk'): # создаем папку на компе
         #     os.mkdir('images_vk')
+
         for i in response['response']['items']:
             url_foto = i['orig_photo']['url']
             likes_photo = i['likes']['count']
             if likes_photo >= 1:
                 file_image = f"{likes_photo}_likes.jpg"
-                with open('images_vk/'f"{file_image}", 'wb') as f:
-                    response = requests.get(url_foto)
-                    f.write(response.content)
+
+                # with open('images_vk/'f"{file_image}", 'wb') as f:   #сохраняем на комп
+                #     response = requests.get(url_foto)
+                #     f.write(response.content)
+
+                add_json('File_name', file_image)
+
                 url_yad = 'https://cloud-api.yandex.net/v1/disk/resources' # создаю папку на яндекс диске
                 params = {
                     'path': 'PhotoS_VK'
@@ -55,6 +79,7 @@ class VK:
                 url = url_foto
                 r = requests.get(url)
                 requests.put(url=upload_url, data=r)
+
 
 vk = VK(vk_token)
 vk.photo_get(76261581)
