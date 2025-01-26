@@ -3,6 +3,8 @@ import requests
 import configparser
 import os
 import json
+from tqdm import tqdm
+
 
 def create_json():
     json_data = [
@@ -18,7 +20,7 @@ def add_json(n_1, n_2):
     }
     data = json.load(open("info.json"))
     data.append(json_data)
-    with open("info.json", "w") as f:
+    with open("info.json", 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=True)
 
 congig = configparser.ConfigParser()
@@ -48,11 +50,11 @@ class VK:
         # if not os.path.exists('images_vk'): # создаем папку на компе
         #     os.mkdir('images_vk')
 
-        for i in response['response']['items']:
+        for i in tqdm(response['response']['items']):
             url_foto = i['orig_photo']['url']
             likes_photo = i['likes']['count']
             if likes_photo >= 1:
-                file_image = f"{likes_photo}_likes.jpg"
+                file_image = f"{likes_photo}_lices.jpg"
 
                 # with open('images_vk/'f"{file_image}", 'wb') as f:   #сохраняем на комп
                 #     response = requests.get(url_foto)
