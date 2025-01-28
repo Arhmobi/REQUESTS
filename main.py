@@ -83,5 +83,6 @@ class VK:
                 requests.put(url=upload_url, data=r)
 
 
+
 vk = VK(vk_token)
 vk.photo_get(76261581)
