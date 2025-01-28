@@ -1,23 +1,11 @@
-
 import requests
 import configparser
 import os
 import json
 from tqdm import tqdm
 
-
-def create_json():
-    json_data = [
-    ]
-    with open('info.json', 'w') as f:
-        f.write(json.dumps(json_data, indent=2, ensure_ascii=True))
-
-create_json()
-
-def add_json(n_1, n_2):
-    json_data = {
-        n_1: n_2
-    }
+def writing_file(n_1, n_2):    # записываю в файл данные по фоткам
+    json_data = {n_1: n_2}
     data = json.load(open("info.json"))
     data.append(json_data)
     with open("info.json", 'w') as f:
@@ -37,6 +25,8 @@ class VK:
         self.baseurl = 'https://api.vk.com/method/'
 
     def photo_get(self, user_id, count=5):
+        with open('info.json', 'w') as f:   # создаю файл для информации
+            f.write(json.dumps([], indent=2, ensure_ascii=True))
         url = f"{self.baseurl}photos.get"
         params = {
             'owner_id': user_id,
@@ -55,32 +45,34 @@ class VK:
             likes_photo = i['likes']['count']
             if likes_photo >= 1:
                 file_image = f"{likes_photo}_lices.jpg"
-
+                writing_file('File_name', file_image) # записываю в файл результат на каждой итерации
+                download_ya_disk(url_foto, file_image)
                 # with open('images_vk/'f"{file_image}", 'wb') as f:   #сохраняем на комп
                 #     response = requests.get(url_foto)
                 #     f.write(response.content)
 
-                add_json('File_name', file_image)
+def download_ya_disk(p_1, p_2):
+    url_foto = p_1
+    file_image = p_2
+    url_yad = 'https://cloud-api.yandex.net/v1/disk/resources'  # создаю папку на яндекс диске
+    params = {
+        'path': 'PhotoS_VK'
+    }
+    headers = {
+        'Authorization': ya_disk
+    }
+    response = requests.put(url_yad, params=params, headers=headers)
 
-                url_yad = 'https://cloud-api.yandex.net/v1/disk/resources' # создаю папку на яндекс диске
-                params = {
-                    'path': 'PhotoS_VK'
-                }
-                headers = {
-                    'Authorization': ya_disk
-                }
-                response = requests.put(url_yad, params=params, headers=headers)
-
-                url = 'https://cloud-api.yandex.net/v1/disk/resources/upload'
-                headers = {'Content-Type': 'application/json',
-                           'Authorization': ya_disk}
-                params = {'path': f'PhotoS_VK/{file_image}',
-                          'overwrite': 'true'}
-                response = requests.get(url, params=params, headers=headers)
-                upload_url = response.json()['href']
-                url = url_foto
-                r = requests.get(url)
-                requests.put(url=upload_url, data=r)
+    url = 'https://cloud-api.yandex.net/v1/disk/resources/upload'
+    headers = {'Content-Type': 'application/json',
+               'Authorization': ya_disk}
+    params = {'path': f'PhotoS_VK/{file_image}',
+              'overwrite': 'true'}
+    response = requests.get(url, params=params, headers=headers)
+    upload_url = response.json()['href']
+    url = url_foto
+    r = requests.get(url)
+    requests.put(url=upload_url, data=r)
 
 
 
