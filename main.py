@@ -1,32 +1,37 @@
 import requests
 import configparser
-import os
 import json
 from tqdm import tqdm
 
-def writing_file(n_1, n_2):    # записываю в файл данные по фоткам
+def writing_file(n_1, n_2):
+    """Записываю в файл данные по фоткам."""
     json_data = {n_1: n_2}
-    data = json.load(open("info.json"))
+    try:
+        with open("info.json", 'r') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        data = []
     data.append(json_data)
     with open("info.json", 'w') as f:
-        json.dump(data, f, indent=2, ensure_ascii=True)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-congig = configparser.ConfigParser()
-congig.read('settings.ini')
-vk_token = congig['TOKEN']['token']
-ya_disk = congig['TOKEN']['ydisk_token']
-photos_dict = {}
+config = configparser.ConfigParser()
+config.read('settings.ini')
+vk_token = config['TOKEN']['token']
+ya_disk = config['TOKEN']['ydisk_token']
+
 class VK:
-    def __init__(self, token, version=5.199):
+    def __init__(self, token, version='5.199'):
         self.params = {
             'access_token': token,
             'v': version
         }
         self.baseurl = 'https://api.vk.com/method/'
 
-    def photo_get(self, user_id, count=5):
+    def photo_get(self, user_id, ya_disk_uploader, count=5):
+        """Получаю фотографии из профиля VK."""
         with open('info.json', 'w') as f:   # создаю файл для информации
-            f.write(json.dumps([], indent=2, ensure_ascii=True))
+            f.write(json.dumps([], indent=2, ensure_ascii=False))
         url = f"{self.baseurl}photos.get"
         params = {
             'owner_id': user_id,
@@ -35,46 +40,80 @@ class VK:
             'count': count
         }
         params.update(self.params)
-        response = requests.get(url, params=params).json()
-
-        # if not os.path.exists('images_vk'): # создаем папку на компе
-        #     os.mkdir('images_vk')
+        try:
+            response = requests.get(url, params=params).json()
+            if 'error' in response:
+                print(f"Ошибка VK API: {response['error']['error_msg']}")
+                return
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка при запросе к VK API: {e}")
+            return
 
         for i in tqdm(response['response']['items']):
-            url_foto = i['orig_photo']['url']
+            url_foto = i['sizes'][-1]['url']  # Используем URL фотографии максимального размера
             likes_photo = i['likes']['count']
-            if likes_photo >= 1:
-                file_image = f"{likes_photo}_lices.jpg"
-                writing_file('File_name', file_image) # записываю в файл результат на каждой итерации
-                download_ya_disk(url_foto, file_image)
-                # with open('images_vk/'f"{file_image}", 'wb') as f:   #сохраняем на комп
-                #     response = requests.get(url_foto)
-                #     f.write(response.content)
+            file_image = f"{likes_photo}_likes.jpg"
+            writing_file('File_name', file_image)  # записываю в файл результат на каждой итерации
+            ya_disk_uploader.upload_file(url_foto, file_image)
 
-def download_ya_disk(p_1, p_2):
-    url_foto = p_1
-    file_image = p_2
-    url_yad = 'https://cloud-api.yandex.net/v1/disk/resources'  # создаю папку на яндекс диске
-    params = {
-        'path': 'PhotoS_VK'
-    }
-    headers = {
-        'Authorization': ya_disk
-    }
-    response = requests.put(url_yad, params=params, headers=headers)
+class YandexDiskUploader:
+    def __init__(self, ya_disk_token):
+        """Инициализация класса с токеном Яндекс.Диска."""
+        self.ya_disk_token = ya_disk_token
+        self.headers = {
+            'Authorization': self.ya_disk_token
+        }
 
-    url = 'https://cloud-api.yandex.net/v1/disk/resources/upload'
-    headers = {'Content-Type': 'application/json',
-               'Authorization': ya_disk}
-    params = {'path': f'PhotoS_VK/{file_image}',
-              'overwrite': 'true'}
-    response = requests.get(url, params=params, headers=headers)
-    upload_url = response.json()['href']
-    url = url_foto
-    r = requests.get(url)
-    requests.put(url=upload_url, data=r)
+    def create_folder(self, folder_name):
+        """Создание папки на Яндекс.Диске."""
+        url = 'https://cloud-api.yandex.net/v1/disk/resources'
+        params = {
+            'path': folder_name
+        }
+        try:
+            response = requests.put(url, params=params, headers=self.headers)
+            if response.status_code == 201:
+                print(f"Папка '{folder_name}' успешно создана на Яндекс.Диске.")
+            elif response.status_code == 409:
+                print(f"Папка '{folder_name}' уже существует.")
+            else:
+                print(f"Ошибка при создании папки: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка при создании папки: {e}")
 
+    def upload_file(self, file_url, file_name, folder_name='PhotoS_VK'):
+        """Загрузка файла на Яндекс.Диск."""
+        # Создаем папку, если она еще не существует
+        self.create_folder(folder_name)
 
+        # Получаем URL для загрузки файла
+        url = 'https://cloud-api.yandex.net/v1/disk/resources/upload'
+        params = {
+            'path': f'{folder_name}/{file_name}',
+            'overwrite': 'true'
+        }
+        try:
+            response = requests.get(url, params=params, headers=self.headers)
+            upload_url = response.json().get('href')
+            if upload_url:
+                # Загружаем файл
+                file_response = requests.get(file_url)
+                upload_response = requests.put(upload_url, data=file_response.content)
+                if upload_response.status_code == 201:
+                    print(f"Файл '{file_name}' успешно загружен в папку '{folder_name}'.")
+                else:
+                    print(f"Ошибка при загрузке файла: {upload_response.status_code}")
+            else:
+                print("Не удалось получить URL для загрузки файла.")
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка при загрузке файла: {e}")
 
+# Основной код
+user_input = int(input('Введите ваш id: '))
+
+# Создаем экземпляр YandexDiskUploader
+ya_disk_uploader = YandexDiskUploader(ya_disk)
+
+# Создаем экземпляр VK и передаем ему YandexDiskUploader
 vk = VK(vk_token)
-vk.photo_get(76261581)
+vk.photo_get(user_input, ya_disk_uploader)
